@@ -1,0 +1,31 @@
+name: Deploy-DB-Scripts
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install SQL Server tools
+        run: |
+          choco install sqlcmd -y
+
+      - name: Run SQL scripts on remote database
+        shell: powershell
+        env:
+          DB_SERVER: ${{ secrets.DB_SERVER }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: |
+          Get-ChildItem -Path "scripts\*.sql" | ForEach-Object {
+            Write-Host "Running script $($_.Name)..."
+            sqlcmd -S $env:DB_SERVER -U $env:DB_USER -P $env:DB_PASS -d $env:DB_NAME -i $_.FullName -b -o "logs_$($_.BaseName).txt"
+          }
