@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: windows-latest
+    runs-on: windows-latest   # Windows runner for SQL Server tools
 
     steps:
       - name: Checkout repository
@@ -25,7 +25,14 @@ jobs:
           DB_PASS: ${{ secrets.DB_PASS }}
           DB_NAME: ${{ secrets.DB_NAME }}
         run: |
-          Get-ChildItem -Path "scripts\*.sql" | ForEach-Object {
-            Write-Host "Running script $($_.Name)..."
+          # Recursively find all .sql files under scripts/
+          Get-ChildItem -Path "scripts" -Recurse -Filter *.sql | Sort-Object FullName | ForEach-Object {
+            Write-Host "Running script $($_.FullName)..."
             sqlcmd -S $env:DB_SERVER -U $env:DB_USER -P $env:DB_PASS -d $env:DB_NAME -i $_.FullName -b -o "logs_$($_.BaseName).txt"
           }
+
+      - name: Upload logs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlcmd-logs
+          path: logs_*.txt
