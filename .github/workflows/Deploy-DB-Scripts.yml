@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: windows-latest   # Windows runner for SQL Server tools
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -25,15 +25,26 @@ jobs:
           DB_PASS: ${{ secrets.DB_PASS }}
           DB_NAME: ${{ secrets.DB_NAME }}
         run: |
-          # Recursively find all .sql files under scripts/
+          $summaryLog = "deployment_summary.txt"
+          Remove-Item $summaryLog -ErrorAction Ignore
+
           Get-ChildItem -Path "scripts" -Recurse -Filter *.sql | Sort-Object FullName | ForEach-Object {
             Write-Host "Running script $($_.FullName)..."
             $logFile = "logs_$($_.BaseName).txt"
-            sqlcmd -S $env:DB_SERVER -U $env:DB_USER -P $env:DB_PASS -d $env:DB_NAME -i $_.FullName -b -o $logFile
+
+            # Run sqlcmd and capture exit code
+            & sqlcmd -S $env:DB_SERVER -U $env:DB_USER -P $env:DB_PASS -d $env:DB_NAME -i $_.FullName -b -o $logFile
+            if ($LASTEXITCODE -eq 0) {
+              Add-Content $summaryLog "$($_.FullName): SUCCESS"
+            } else {
+              Add-Content $summaryLog "$($_.FullName): ERROR (see $logFile)"
+              throw "Script $($_.FullName) failed. See $logFile for details."
+            }
           }
 
-      - name: Upload logs as artifacts
+      - name: Upload consolidated summary
+        if: always()   # upload even if job fails
         uses: actions/upload-artifact@v4
         with:
-          name: sqlcmd-logs
-          path: logs_*.txt
+          name: sqlcmd-summary
+          path: deployment_summary.txt
